@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: sportbot-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - sportbot-network
+
+  ingestion-service:
+    build:
+      context: .
+      dockerfile: ingestion-service/Dockerfile
+    container_name: sportbot-ingestion
+    environment:
+      - FOOTBALL_API_KEY=${FOOTBALL_API_KEY}
+      - FOOTBALL_API_HOST=${FOOTBALL_API_HOST}
+      - FOOTBALL_BASE_URL=${FOOTBALL_BASE_URL}
+      - FOOTBALL_MATCHES=${FOOTBALL_MATCHES}
+      - POLL_INTERVAL=${POLL_INTERVAL}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - QUARKUS_REDIS_HOSTS=redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - sportbot-network
+
+  analytics-service:
+    build:
+      context: .
+      dockerfile: analytics-service/Dockerfile
+    container_name: sportbot-analytics
+    environment:
+      - ANALYTICS_MATCHES=${ANALYTICS_MATCHES}
+      - SNAPSHOT_INTERVAL=${SNAPSHOT_INTERVAL}
+      - MONTE_CARLO_HORIZON_MINUTES=${MONTE_CARLO_HORIZON_MINUTES}
+      - MONTE_CARLO_SIMULATIONS=${MONTE_CARLO_SIMULATIONS}
+      - ARIMA_HORIZON_MINUTES=${ARIMA_HORIZON_MINUTES}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - QUARKUS_REDIS_HOSTS=redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - sportbot-network
+
+  websocket-api:
+    build:
+      context: .
+      dockerfile: websocket-api/Dockerfile
+    container_name: sportbot-websocket
+    ports:
+      - "8083:8083"
+    environment:
+      - BROADCAST_MATCHES=${BROADCAST_MATCHES}
+      - BROADCAST_INTERVAL=${BROADCAST_INTERVAL}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - QUARKUS_REDIS_HOSTS=redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - sportbot-network
+
+  dashboard:
+    build:
+      context: dashboard
+      dockerfile: Dockerfile
+    container_name: sportbot-dashboard
+    ports:
+      - "3000:80"
+    depends_on:
+      - websocket-api
+    restart: unless-stopped
+    networks:
+      - sportbot-network
+
+networks:
+  sportbot-network:
+    driver: bridge
