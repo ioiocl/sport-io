@@ -14,7 +14,7 @@ function App() {
     
     // Send selected match IDs to backend to start ingestion
     try {
-      await fetch('http://localhost:8083/api/start-analysis', {
+      await fetch('/api/start-analysis', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -37,7 +37,8 @@ function App() {
   useEffect(() => {
     if (view !== 'analysis') return
 
-    const ws = new WebSocket('ws://localhost:8083/matches')
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const ws = new WebSocket(`${protocol}//${window.location.host}/matches`)
 
     ws.onopen = () => {
       console.log('Connected to WebSocket')

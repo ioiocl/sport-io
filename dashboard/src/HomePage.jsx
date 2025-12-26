@@ -17,7 +17,7 @@ function HomePage({ onStartAnalysis }) {
     try {
       setLoading(true)
       // Use backend proxy to avoid CORS issues
-      const response = await fetch('http://localhost:8083/api/live-matches')
+        const response = await fetch('/api/live-matches')
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)

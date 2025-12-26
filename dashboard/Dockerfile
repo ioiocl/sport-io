@@ -8,9 +8,18 @@ COPY . .
 RUN npm run build
 
 FROM nginx:alpine
+
+# Copy built files
 COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Copy nginx template (will be replaced at runtime)
+COPY nginx.conf.template /etc/nginx/conf.d/default.conf
+
+# Copy entrypoint script
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 EXPOSE 80
 
-CMD ["nginx", "-g", "daemon off;"]
+# Use entrypoint to inject runtime config
+ENTRYPOINT ["/entrypoint.sh"]
