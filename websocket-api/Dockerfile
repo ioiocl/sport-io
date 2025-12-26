@@ -9,19 +9,13 @@ COPY pom.xml .
 COPY shared-domain shared-domain/
 COPY websocket-api/pom.xml websocket-api/
 
-# Install parent POM and build shared-domain first with retry logic
-RUN --mount=type=cache,target=/root/.m2/repository \
-    mvn -N install -s /root/.m2/settings.xml && \
+# Install parent POM and build shared-domain first
+RUN mvn -N install -s /root/.m2/settings.xml && \
     mvn -f shared-domain/pom.xml clean install -DskipTests -s /root/.m2/settings.xml
 
-# Download dependencies with caching
-RUN --mount=type=cache,target=/root/.m2/repository \
-    mvn -f websocket-api/pom.xml dependency:go-offline -s /root/.m2/settings.xml
-
-# Copy source and build
+# Copy source and build (dependencies will be downloaded during build)
 COPY websocket-api/src websocket-api/src/
-RUN --mount=type=cache,target=/root/.m2/repository \
-    mvn -f websocket-api/pom.xml clean package -DskipTests -s /root/.m2/settings.xml
+RUN mvn -f websocket-api/pom.xml clean package -DskipTests -s /root/.m2/settings.xml
 
 FROM eclipse-temurin:17-jre
 WORKDIR /app

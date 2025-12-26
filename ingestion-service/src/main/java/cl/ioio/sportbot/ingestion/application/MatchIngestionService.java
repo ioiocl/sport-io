@@ -28,6 +28,9 @@ public class MatchIngestionService {
     @ConfigProperty(name = "football.matches", defaultValue = "")
     String matchesConfig;
     
+    @ConfigProperty(name = "auto.discover.live", defaultValue = "true")
+    boolean autoDiscoverLive;
+    
     @Inject
     FootballApiClient footballApiClient;
     
@@ -43,8 +46,13 @@ public class MatchIngestionService {
     void onStart(@Observes StartupEvent ev) {
         this.valueCommands = redisDataSource.value(String.class);
         
-        // Don't start with any matches - wait for user selection
-        log.info("Ingestion service started. Waiting for match selection...");
+        if (autoDiscoverLive) {
+            log.info("Ingestion service started in AUTO-DISCOVER mode. Will fetch live matches automatically.");
+            // Trigger immediate discovery
+            discoverLiveMatches();
+        } else {
+            log.info("Ingestion service started. Waiting for match selection...");
+        }
     }
     
     /**
@@ -53,16 +61,12 @@ public class MatchIngestionService {
      */
     @Scheduled(every = "${poll.interval:15s}")
     void pollMatches() {
-        // Check Redis for active match IDs
-        String activeMatchIds = valueCommands.get("active_match_ids");
-        
-        if (activeMatchIds == null || activeMatchIds.isEmpty()) {
-            // No matches selected yet
+        // If auto-discover is enabled and no matches, skip
+        if (matchIds.isEmpty()) {
+            log.debug("No matches to poll yet");
             return;
         }
         
-        // Update match IDs list
-        matchIds = Arrays.asList(activeMatchIds.split(","));
         log.debug("Polling {} matches", matchIds.size());
         
         for (String matchId : matchIds) {
@@ -94,16 +98,31 @@ public class MatchIngestionService {
     }
     
     /**
-     * Discover live matches (optional - can be used to auto-update match list)
+     * Discover live matches and auto-update the list
+     * Runs every 5 minutes
      */
     @Scheduled(every = "5m")
     void discoverLiveMatches() {
+        if (!autoDiscoverLive) {
+            return;
+        }
+        
         try {
             List<String> liveMatches = footballApiClient.getLiveMatches();
-            log.info("Currently {} live matches available", liveMatches.size());
+            log.info("Discovered {} live matches", liveMatches.size());
             
-            // Optionally update matchIds list here
-            // matchIds = liveMatches;
+            if (!liveMatches.isEmpty()) {
+                // Update the match list
+                matchIds = new ArrayList<>(liveMatches);
+                
+                // Store in Redis for other services
+                String matchIdsStr = String.join(",", liveMatches);
+                valueCommands.set("active_match_ids", matchIdsStr);
+                
+                log.info("Updated active matches: {}", matchIdsStr);
+            } else {
+                log.warn("No live matches found");
+            }
             
         } catch (Exception e) {
             log.error("Error discovering live matches", e);
