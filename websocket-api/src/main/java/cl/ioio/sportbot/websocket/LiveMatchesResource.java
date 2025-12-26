@@ -30,7 +30,7 @@ public class LiveMatchesResource {
     @ConfigProperty(name = "football.api.host", defaultValue = "v3.football.api-sports.io")
     String apiHost;
 
-    @ConfigProperty(name = "football.api.base-url", defaultValue = "https://v3.football.api-sports.io")
+    @ConfigProperty(name = "football.api.base.url", defaultValue = "https://v3.football.api-sports.io")
     String baseUrl;
 
     private final HttpClient httpClient;

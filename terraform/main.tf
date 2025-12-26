@@ -385,6 +385,26 @@ resource "google_cloud_run_v2_service" "websocket_service" {
       }
 
       env {
+        name  = "FOOTBALL_API_HOST"
+        value = "v3.football.api-sports.io"
+      }
+
+      env {
+        name  = "FOOTBALL_API_BASE_URL"
+        value = "https://v3.football.api-sports.io"
+      }
+
+      env {
+        name = "FOOTBALL_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.football_api_key.secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
         name  = "BROADCAST_MATCHES"
         value = var.football_matches
       }
