@@ -56,12 +56,35 @@ public class MatchIngestionService {
     }
     
     /**
+     * Check Redis for active match IDs set by the dashboard
+     * Runs every 10 seconds
+     */
+    @Scheduled(every = "10s")
+    void checkActiveMatches() {
+        try {
+            String activeMatchIds = valueCommands.get("active_match_ids");
+            if (activeMatchIds != null && !activeMatchIds.isEmpty()) {
+                List<String> newMatchIds = Arrays.asList(activeMatchIds.split(","));
+                if (!newMatchIds.equals(matchIds)) {
+                    matchIds = new ArrayList<>(newMatchIds);
+                    log.info("Updated active matches from Redis: {}", activeMatchIds);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error checking active matches from Redis", e);
+        }
+    }
+    
+    /**
      * Poll matches at configured interval
      * Default: every 15 seconds
      */
     @Scheduled(every = "${poll.interval:15s}")
     void pollMatches() {
-        // If auto-discover is enabled and no matches, skip
+        // Check Redis for active matches first
+        checkActiveMatches();
+        
+        // If no matches, skip
         if (matchIds.isEmpty()) {
             log.debug("No matches to poll yet");
             return;
