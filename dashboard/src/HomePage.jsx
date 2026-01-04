@@ -265,7 +265,6 @@ function HomePage({ onStartAnalysis }) {
         )}
       </div>
     </div>
-    </div>
   )
 }
 
