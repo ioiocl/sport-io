@@ -180,14 +180,19 @@ resource "google_cloud_run_v2_service" "ingestion_service" {
       }
 
       startup_probe {
-        initial_delay_seconds = 0
-        timeout_seconds       = 240
-        period_seconds        = 240
-        failure_threshold     = 1
+        initial_delay_seconds = 10
+        timeout_seconds       = 3
+        period_seconds        = 10
+        failure_threshold     = 3
         http_get {
           path = "/health"
           port = 8080
         }
+      }
+
+      env {
+        name  = "QUARKUS_HTTP_PORT"
+        value = "8080"
       }
 
       env {
@@ -212,7 +217,7 @@ resource "google_cloud_run_v2_service" "ingestion_service" {
 
       env {
         name  = "AUTO_DISCOVER_LIVE"
-        value = "true"
+        value = "false"
       }
 
       env {
@@ -278,14 +283,19 @@ resource "google_cloud_run_v2_service" "analytics_service" {
       }
 
       startup_probe {
-        initial_delay_seconds = 0
-        timeout_seconds       = 240
-        period_seconds        = 240
-        failure_threshold     = 1
+        initial_delay_seconds = 10
+        timeout_seconds       = 3
+        period_seconds        = 10
+        failure_threshold     = 3
         http_get {
           path = "/health"
           port = 8080
         }
+      }
+
+      env {
+        name  = "QUARKUS_HTTP_PORT"
+        value = "8080"
       }
 
       env {
@@ -370,10 +380,10 @@ resource "google_cloud_run_v2_service" "websocket_service" {
       }
 
       startup_probe {
-        initial_delay_seconds = 0
-        timeout_seconds       = 240
-        period_seconds        = 240
-        failure_threshold     = 1
+        initial_delay_seconds = 10
+        timeout_seconds       = 3
+        period_seconds        = 10
+        failure_threshold     = 3
         http_get {
           path = "/health"
           port = 8080
@@ -381,7 +391,12 @@ resource "google_cloud_run_v2_service" "websocket_service" {
       }
 
       ports {
-        container_port = 8083
+        container_port = 8080
+      }
+
+      env {
+        name  = "QUARKUS_HTTP_PORT"
+        value = "8080"
       }
 
       env {

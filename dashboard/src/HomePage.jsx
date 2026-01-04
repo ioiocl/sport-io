@@ -78,8 +78,20 @@ function HomePage({ onStartAnalysis }) {
   }
 
   return (
-    <div className="min-h-screen p-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen">
+      {/* Top Header Bar */}
+      <div className="bg-white/5 backdrop-blur-sm border-b border-white/10">
+        <div className="max-w-7xl mx-auto px-8 py-3 flex items-center justify-between">
+          <span className="text-white text-lg font-semibold">IOIO - riesgo controlado</span>
+          <img 
+            src="/logo/ioio_logo.png" 
+            alt="IOIO Logo" 
+            className="h-10 w-10"
+          />
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto p-8">
         {/* Header */}
         <div className="mb-8 text-center">
           <h1 className="text-5xl font-bold text-white mb-4">
@@ -252,6 +264,7 @@ function HomePage({ onStartAnalysis }) {
           </div>
         )}
       </div>
+    </div>
     </div>
   )
 }

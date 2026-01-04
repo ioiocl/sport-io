@@ -37,44 +37,63 @@ function App() {
   useEffect(() => {
     if (view !== 'analysis') return
 
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const ws = new WebSocket(`${protocol}//${window.location.host}/matches`)
+    let ws = null
+    let reconnectTimeout = null
+    let isIntentionallyClosed = false
 
-    ws.onopen = () => {
-      console.log('Connected to WebSocket')
-      setConnected(true)
-      setError(null)
-    }
+    const connect = () => {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      ws = new WebSocket(`${protocol}//${window.location.host}/matches`)
 
-    ws.onmessage = (event) => {
-      try {
-        const snapshot = JSON.parse(event.data)
-        setMatches(prev => ({
-          ...prev,
-          [snapshot.matchId]: snapshot
-        }))
-      } catch (err) {
-        console.error('Error parsing message:', err)
+      ws.onopen = () => {
+        console.log('Connected to WebSocket')
+        setConnected(true)
+        setError(null)
+      }
+
+      ws.onmessage = (event) => {
+        try {
+          const snapshot = JSON.parse(event.data)
+          setMatches(prev => ({
+            ...prev,
+            [snapshot.matchId]: snapshot
+          }))
+        } catch (err) {
+          console.error('Error parsing message:', err)
+        }
+      }
+
+      ws.onerror = (err) => {
+        console.error('WebSocket error:', err)
+        setError('Connection error - attempting to reconnect...')
+        setConnected(false)
+      }
+
+      ws.onclose = () => {
+        console.log('Disconnected from WebSocket')
+        setConnected(false)
+        
+        // Only attempt to reconnect if not intentionally closed
+        if (!isIntentionallyClosed) {
+          setError('Connection lost - reconnecting in 5 seconds...')
+          reconnectTimeout = setTimeout(() => {
+            console.log('Attempting to reconnect...')
+            connect()
+          }, 5000)
+        }
       }
     }
 
-    ws.onerror = (err) => {
-      console.error('WebSocket error:', err)
-      setError('Connection error')
-      setConnected(false)
-    }
-
-    ws.onclose = () => {
-      console.log('Disconnected from WebSocket')
-      setConnected(false)
-      // Reconnect after 5 seconds
-      setTimeout(() => {
-        window.location.reload()
-      }, 5000)
-    }
+    connect()
 
     return () => {
-      ws.close()
+      isIntentionallyClosed = true
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout)
+      }
+      if (ws) {
+        ws.close()
+      }
     }
   }, [view])
 
@@ -83,8 +102,20 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen p-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen">
+      {/* Top Header Bar */}
+      <div className="bg-white/5 backdrop-blur-sm border-b border-white/10">
+        <div className="max-w-7xl mx-auto px-8 py-3 flex items-center justify-between">
+          <span className="text-white text-lg font-semibold">IOIO - riesgo controlado</span>
+          <img 
+            src="/logo/ioio_logo.png" 
+            alt="IOIO Logo" 
+            className="h-10 w-10"
+          />
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto p-8">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
@@ -111,9 +142,8 @@ function App() {
 
         {/* Error Message */}
         {error && (
-          <div className="mb-6 p-4 bg-red-500/20 border border-red-500 rounded-lg text-white">
+          <div className="mb-6 p-4 bg-yellow-500/20 border border-yellow-500 rounded-lg text-white">
             <p className="font-semibold">⚠️ {error}</p>
-            <p className="text-sm mt-1">Reconnecting in 5 seconds...</p>
           </div>
         )}
 
@@ -150,6 +180,7 @@ function App() {
           </div>
         )}
       </div>
+    </div>
     </div>
   )
 }
