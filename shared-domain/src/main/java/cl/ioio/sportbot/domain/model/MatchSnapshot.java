@@ -11,6 +11,8 @@ import java.time.Instant;
 /**
  * Complete analytical snapshot of a match at a point in time
  * Equivalent to MarketSnapshot in Finbot
+ * 
+ * Enhanced with KPI bundle for comprehensive match analysis
  */
 @Data
 @Builder
@@ -26,6 +28,12 @@ public class MatchSnapshot {
     
     @JsonProperty("awayTeam")
     private String awayTeam;
+    
+    @JsonProperty("homeTeamId")
+    private String homeTeamId;
+    
+    @JsonProperty("awayTeamId")
+    private String awayTeamId;
     
     @JsonProperty("timestamp")
     private Instant timestamp;
@@ -72,11 +80,46 @@ public class MatchSnapshot {
     @JsonProperty("needsRecalibration")
     private Boolean needsRecalibration;
     
+    // ============ NEW KPI BUNDLE ============
+    /**
+     * Comprehensive KPI metrics for dashboard display
+     * Includes possession momentum, shot pressure, discipline metrics, etc.
+     */
+    @JsonProperty("kpis")
+    private MatchKPIs kpis;
+    
+    /**
+     * Structured home team statistics (from API)
+     */
+    @JsonProperty("homeStats")
+    private TeamStatistics homeStats;
+    
+    /**
+     * Structured away team statistics (from API)
+     */
+    @JsonProperty("awayStats")
+    private TeamStatistics awayStats;
+    
+    /**
+     * API version for backward compatibility
+     * v1 = legacy, v2 = includes KPIs and structured stats
+     */
+    @JsonProperty("apiVersion")
+    @Builder.Default
+    private String apiVersion = "v2";
+    
     public enum MatchState {
         HOME_DOMINATING,
         HOME_SLIGHT_ADVANTAGE,
         BALANCED,
         AWAY_SLIGHT_ADVANTAGE,
         AWAY_DOMINATING
+    }
+    
+    /**
+     * Check if this snapshot has KPI data
+     */
+    public boolean hasKPIs() {
+        return kpis != null;
     }
 }

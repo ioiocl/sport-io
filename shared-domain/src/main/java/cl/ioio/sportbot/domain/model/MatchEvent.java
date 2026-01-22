@@ -8,10 +8,13 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 
 /**
  * Represents a single event/tick from a live football match
  * Equivalent to MarketTick in Finbot
+ * 
+ * Enhanced with structured home/away statistics and live event feeds
  */
 @Data
 @Builder
@@ -45,6 +48,13 @@ public class MatchEvent {
     @JsonProperty("awayTeam")
     private String awayTeam;
     
+    @JsonProperty("homeTeamId")
+    private String homeTeamId;
+    
+    @JsonProperty("awayTeamId")
+    private String awayTeamId;
+    
+    // ============ LEGACY FIELDS (kept for backward compatibility) ============
     // Statistics (converted to momentum metric)
     @JsonProperty("possession")
     private BigDecimal possession; // Home team possession %
@@ -78,6 +88,34 @@ public class MatchEvent {
     @JsonProperty("eventType")
     private EventType eventType;
     
+    // ============ NEW STRUCTURED STATISTICS ============
+    /**
+     * Comprehensive home team statistics
+     */
+    @JsonProperty("homeStats")
+    private TeamStatistics homeStats;
+    
+    /**
+     * Comprehensive away team statistics
+     */
+    @JsonProperty("awayStats")
+    private TeamStatistics awayStats;
+    
+    /**
+     * Live match events (goals, cards, substitutions, etc.)
+     * Ordered chronologically
+     */
+    @JsonProperty("liveEvents")
+    private List<LiveMatchEvent> liveEvents;
+    
+    /**
+     * API version indicator for backward compatibility
+     * v1 = legacy fields only, v2 = includes structured stats
+     */
+    @JsonProperty("apiVersion")
+    @Builder.Default
+    private String apiVersion = "v2";
+    
     public enum EventType {
         GOAL,
         YELLOW_CARD,
@@ -88,5 +126,12 @@ public class MatchEvent {
         CORNER,
         OFFSIDE,
         NONE
+    }
+    
+    /**
+     * Check if this event has enriched statistics
+     */
+    public boolean hasEnrichedStats() {
+        return homeStats != null && awayStats != null;
     }
 }

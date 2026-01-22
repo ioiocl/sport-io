@@ -1,6 +1,7 @@
 package cl.ioio.sportbot.analytics.application;
 
 import cl.ioio.sportbot.analytics.domain.GoalForecaster;
+import cl.ioio.sportbot.analytics.domain.KPICalculator;
 import cl.ioio.sportbot.analytics.domain.MatchSimulator;
 import cl.ioio.sportbot.analytics.domain.MomentumAnalyzer;
 import cl.ioio.sportbot.domain.model.*;
@@ -45,6 +46,9 @@ public class MatchAnalysisService {
     
     @Inject
     cl.ioio.sportbot.analytics.domain.ABCAnalyzer abcAnalyzer;
+    
+    @Inject
+    KPICalculator kpiCalculator;
     
     @Inject
     RedisDataSource redisDataSource;
@@ -146,15 +150,20 @@ public class MatchAnalysisService {
                 minutesRemaining
         );
         
+        // Calculate KPIs from enriched event history
+        MatchKPIs kpis = kpiCalculator.calculate(history);
+        
         // Determine match state from ABC-adjusted momentum
         MatchSnapshot.MatchState state = determineMatchState(
                 abcResult.getMomentumMetrics().getDrift().doubleValue());
         
-        // Create snapshot with ABC analysis
+        // Create snapshot with ABC analysis and KPIs
         MatchSnapshot snapshot = MatchSnapshot.builder()
                 .matchId(matchId)
                 .homeTeam(latest.getHomeTeam())
                 .awayTeam(latest.getAwayTeam())
+                .homeTeamId(latest.getHomeTeamId())
+                .awayTeamId(latest.getAwayTeamId())
                 .timestamp(Instant.now())
                 .minute(latest.getMinute())
                 .status(latest.getStatus())
@@ -168,9 +177,17 @@ public class MatchAnalysisService {
                 .arimaSignal(abcResult.getArimaSignal())
                 .abcIntegrationConfidence(abcResult.getIntegrationConfidence())
                 .needsRecalibration(abcResult.isNeedsRecalibration())
+                // New KPI bundle
+                .kpis(kpis)
+                .homeStats(latest.getHomeStats())
+                .awayStats(latest.getAwayStats())
+                .apiVersion("v2")
                 .build();
         
         snapshotRepository.save(snapshot);
+        
+        // Log KPI alerts
+        logKPIAlerts(matchId, kpis);
         
         if (abcResult.isNeedsRecalibration()) {
             log.warn("⚠️ Match {}: {} - RECALIBRATION NEEDED! ARIMA: {}", 
@@ -179,6 +196,35 @@ public class MatchAnalysisService {
             log.info("✓ Match {}: {} - ABC confidence: {} - ARIMA: {}", 
                     matchId, state, abcResult.getIntegrationConfidence(), 
                     abcResult.getArimaSignal().getDescription());
+        }
+    }
+    
+    private void logKPIAlerts(String matchId, MatchKPIs kpis) {
+        if (kpis == null) return;
+        
+        StringBuilder alerts = new StringBuilder();
+        
+        if (Boolean.TRUE.equals(kpis.getHomeHighPressAlert())) {
+            alerts.append("🔥 HOME HIGH PRESS ");
+        }
+        if (Boolean.TRUE.equals(kpis.getAwayHighPressAlert())) {
+            alerts.append("🔥 AWAY HIGH PRESS ");
+        }
+        if (Boolean.TRUE.equals(kpis.getHomeCardRiskAlert())) {
+            alerts.append("🟨 HOME CARD RISK ");
+        }
+        if (Boolean.TRUE.equals(kpis.getAwayCardRiskAlert())) {
+            alerts.append("🟨 AWAY CARD RISK ");
+        }
+        if (Boolean.TRUE.equals(kpis.getHomeGoalImminentAlert())) {
+            alerts.append("⚽ HOME GOAL IMMINENT ");
+        }
+        if (Boolean.TRUE.equals(kpis.getAwayGoalImminentAlert())) {
+            alerts.append("⚽ AWAY GOAL IMMINENT ");
+        }
+        
+        if (alerts.length() > 0) {
+            log.info("🚨 Match {} ALERTS: {}", matchId, alerts.toString().trim());
         }
     }
     
