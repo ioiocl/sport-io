@@ -1,0 +1,129 @@
+@startuml Deployment Diagram - Sportbot
+!theme plain
+
+skinparam backgroundColor #FEFEFE
+
+title Sportbot - Diagrama de Despliegue (Docker Compose)
+
+node "Docker Host" {
+    
+    node "Ingestion Service Container" <<container>> {
+        artifact "ingestion-service.jar" as IngestionJar
+        component "Quarkus Runtime" as IngestionRuntime
+        component "FootballApiClient" as ApiClient
+        
+        IngestionRuntime --> IngestionJar
+        IngestionRuntime --> ApiClient
+        
+        note right of IngestionJar
+          **Port**: 8081
+          **Environment**:
+          - FOOTBALL_API_KEY
+          - POLL_INTERVAL=15s
+          - AUTO_DISCOVER_LIVE=true
+        end note
+    }
+    
+    node "Analytics Service Container" <<container>> {
+        artifact "analytics-service.jar" as AnalyticsJar
+        component "Quarkus Runtime" as AnalyticsRuntime
+        component "ABC Analyzer" as ABC
+        component "ARIMA Engine" as ARIMA
+        component "Bayesian Engine" as Bayesian
+        component "Monte Carlo Engine" as MonteCarlo
+        
+        AnalyticsRuntime --> AnalyticsJar
+        AnalyticsRuntime --> ABC
+        ABC --> ARIMA
+        ABC --> Bayesian
+        ABC --> MonteCarlo
+        
+        note right of AnalyticsJar
+          **Port**: 8082
+          **Environment**:
+          - SNAPSHOT_INTERVAL=15s
+          - ARIMA_HORIZON_MINUTES=10
+        end note
+    }
+    
+    node "WebSocket API Container" <<container>> {
+        artifact "websocket-api.jar" as WebSocketJar
+        component "Quarkus Runtime" as WebSocketRuntime
+        component "WebSocket Endpoint" as WSEndpoint
+        
+        WebSocketRuntime --> WebSocketJar
+        WebSocketRuntime --> WSEndpoint
+        
+        note right of WebSocketJar
+          **Port**: 8083
+          **WebSocket**: /matches
+          **Broadcast**: every 5s
+        end note
+    }
+    
+    node "Dashboard Container" <<container>> {
+        artifact "React Build" as ReactBuild
+        component "Nginx Server" as Nginx
+        
+        Nginx --> ReactBuild
+        
+        note right of ReactBuild
+          **Port**: 3000
+          **Static Files**:
+          - HTML, CSS, JS
+          - WebSocket client
+        end note
+    }
+    
+    node "Redis Container" <<container>> {
+        database "Redis Server" as Redis {
+            component "Pub/Sub Engine" as PubSub
+            component "Key-Value Store" as KV
+        }
+        
+        note right of Redis
+          **Port**: 6379
+          **Channels**:
+          - match-events:*
+          **Keys**:
+          - latest_match_snapshot:*
+          - active_match_ids
+        end note
+    }
+}
+
+cloud "Internet" {
+    node "API-Football" <<external>> {
+        component "REST API" as APIREST
+        
+        note right of APIREST
+          **Endpoint**:
+          v3.football.api-sports.io
+          **Rate Limit**:
+          100 requests/day (free)
+        end note
+    }
+}
+
+actor "Usuario" as User
+
+' Network connections
+User --> Nginx : "HTTP\nlocalhost:3000"
+Nginx --> WSEndpoint : "WebSocket\nlocalhost:8083/matches"
+
+ApiClient --> APIREST : "HTTPS\nPolling every 15s"
+
+IngestionRuntime --> PubSub : "PUBLISH\nmatch-events:*"
+AnalyticsRuntime --> PubSub : "SUBSCRIBE\nmatch-events:*"
+AnalyticsRuntime --> KV : "SET/GET\nsnapshots"
+WebSocketRuntime --> KV : "GET\nsnapshots"
+Nginx --> KV : "SET\nactive_match_ids"
+
+note bottom of "Docker Host"
+  **Docker Compose Network**
+  - Bridge network: sportbot-network
+  - All services communicate via service names
+  - Redis as message broker and cache
+end note
+
+@enduml

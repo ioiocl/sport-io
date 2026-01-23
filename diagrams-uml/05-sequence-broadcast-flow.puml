@@ -1,0 +1,145 @@
+@startuml Sequence - WebSocket Broadcast Flow
+!theme plain
+
+skinparam backgroundColor #FEFEFE
+skinparam sequenceMessageAlign center
+
+title Sportbot - Flujo de Broadcasting WebSocket
+
+actor "User" as User
+participant "Dashboard\n(React)" as Dashboard
+participant "WebSocket\nAPI" as WebSocket
+database "Redis KV" as RedisKV
+participant "Broadcast\nService" as Broadcast
+
+== WebSocket Connection ==
+
+User -> Dashboard : Abre aplicación
+activate Dashboard
+
+Dashboard -> WebSocket : Connect to\nws://localhost:8083/matches
+activate WebSocket
+
+WebSocket -> Broadcast : onOpen(session)
+activate Broadcast
+
+Broadcast -> Broadcast : sessions.put(\nsessionId, session)
+
+Broadcast --> WebSocket : Connected
+deactivate Broadcast
+
+WebSocket --> Dashboard : Connection established
+deactivate WebSocket
+
+Dashboard --> User : Muestra interfaz
+deactivate Dashboard
+
+== Broadcasting Loop (every 5s) ==
+
+loop Every 5 seconds
+    Broadcast -> Broadcast : broadcast()
+    activate Broadcast
+    
+    alt Has connected clients
+        Broadcast -> RedisKV : GET active_match_ids
+        activate RedisKV
+        RedisKV --> Broadcast : "1234,5678,9012"
+        deactivate RedisKV
+        
+        loop For each match ID
+            Broadcast -> RedisKV : GET\nlatest_match_snapshot:1234
+            activate RedisKV
+            RedisKV --> Broadcast : {MatchSnapshot JSON}
+            deactivate RedisKV
+            
+            Broadcast -> Broadcast : Deserialize to\nMatchSnapshot
+            
+            loop For each connected session
+                Broadcast -> WebSocket : sendText(snapshot JSON)
+                activate WebSocket
+                
+                WebSocket -> Dashboard : WebSocket message:\n{MatchSnapshot}
+                activate Dashboard
+                
+                Dashboard -> Dashboard : Update state with\nnew snapshot
+                Dashboard -> Dashboard : Re-render\nMatchCard components
+                
+                Dashboard --> User : Actualiza UI\ncon datos en vivo
+                activate User
+                
+                note right of Dashboard
+                  **Snapshot Data**
+                  - Score: 2-1
+                  - Momentum: HOME_DOMINATING
+                  - Next goal prob: 45%
+                  - Win probability: 65%
+                  - KPI Alerts: 🔥 HIGH PRESS
+                end note
+                
+                User --> Dashboard : Ve actualización
+                deactivate User
+                
+                deactivate Dashboard
+                
+                WebSocket --> Broadcast : Sent
+                deactivate WebSocket
+            end
+            
+            note right of Broadcast
+              Broadcasted match 1234
+              to 3 clients
+            end note
+        end
+        
+    else No clients connected
+        note right of Broadcast
+          No clients, skip broadcast
+        end note
+    end
+    
+    deactivate Broadcast
+end
+
+== User Disconnection ==
+
+User -> Dashboard : Cierra aplicación
+activate Dashboard
+
+Dashboard -> WebSocket : Close connection
+activate WebSocket
+
+WebSocket -> Broadcast : onClose(session)
+activate Broadcast
+
+Broadcast -> Broadcast : sessions.remove(\nsessionId)
+
+note right of Broadcast
+  Client disconnected
+  (total: 2)
+end note
+
+Broadcast --> WebSocket : Removed
+deactivate Broadcast
+
+WebSocket --> Dashboard : Disconnected
+deactivate WebSocket
+
+deactivate Dashboard
+
+note over Broadcast
+  **Broadcast Service**
+  - Maintains active sessions
+  - Polls Redis every 5s
+  - Sends snapshots to all clients
+  - Async non-blocking sends
+end note
+
+note over Dashboard
+  **React Dashboard**
+  - WebSocket client
+  - Real-time updates
+  - Auto-reconnect on disconnect
+  - State management for matches
+end note
+
+@enduml

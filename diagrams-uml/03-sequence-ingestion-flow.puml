@@ -1,0 +1,130 @@
+@startuml Sequence - Data Ingestion Flow
+!theme plain
+
+skinparam backgroundColor #FEFEFE
+skinparam sequenceMessageAlign center
+
+title Sportbot - Flujo de Ingesta de Datos
+
+actor "User" as User
+participant "Dashboard\n(React)" as Dashboard
+database "Redis KV" as RedisKV
+participant "Ingestion\nService" as Ingestion
+participant "Football\nApiClient" as ApiClient
+participant "API-Football" as APIFootball
+participant "Redis\nPublisher" as Publisher
+database "Redis\nPub/Sub" as RedisPubSub
+
+== Selección de Partidos ==
+
+User -> Dashboard : Selecciona partidos\na monitorear
+activate Dashboard
+
+Dashboard -> RedisKV : SET active_match_ids\n"1234,5678,9012"
+activate RedisKV
+RedisKV --> Dashboard : OK
+deactivate RedisKV
+
+Dashboard --> User : Confirmación
+deactivate Dashboard
+
+== Polling Automático (cada 15s) ==
+
+loop Every 15 seconds
+    Ingestion -> RedisKV : GET active_match_ids
+    activate Ingestion
+    activate RedisKV
+    RedisKV --> Ingestion : "1234,5678,9012"
+    deactivate RedisKV
+    
+    loop For each match ID
+        Ingestion -> ApiClient : fetchMatchData(matchId)
+        activate ApiClient
+        
+        ApiClient -> APIFootball : GET /fixtures?id=1234
+        activate APIFootball
+        APIFootball --> ApiClient : Fixture data\n(teams, score, status)
+        deactivate APIFootball
+        
+        ApiClient -> APIFootball : GET /fixtures/statistics?fixture=1234
+        activate APIFootball
+        APIFootball --> ApiClient : Statistics\n(possession, shots, xG)
+        deactivate APIFootball
+        
+        ApiClient -> APIFootball : GET /fixtures/events?fixture=1234
+        activate APIFootball
+        APIFootball --> ApiClient : Live events\n(goals, cards, subs)
+        deactivate APIFootball
+        
+        ApiClient -> ApiClient : Build MatchEvent\nwith enriched data
+        
+        ApiClient --> Ingestion : MatchEvent
+        deactivate ApiClient
+        
+        Ingestion -> Publisher : publish(MatchEvent)
+        activate Publisher
+        
+        Publisher -> Publisher : Serialize to JSON
+        
+        Publisher -> RedisPubSub : PUBLISH\nmatch-events:1234\n{MatchEvent JSON}
+        activate RedisPubSub
+        RedisPubSub --> Publisher : OK
+        deactivate RedisPubSub
+        
+        Publisher --> Ingestion : Published
+        deactivate Publisher
+        
+        note right of Ingestion
+          Log: Match 1234: 
+          Team A 2 - 1 Team B
+          (45' - 1H)
+        end note
+        
+        Ingestion -> Ingestion : Sleep 500ms\n(rate limiting)
+    end
+    
+    deactivate Ingestion
+end
+
+== Auto-Discovery (cada 5 minutos) ==
+
+loop Every 5 minutes
+    Ingestion -> ApiClient : getLiveMatches()
+    activate Ingestion
+    activate ApiClient
+    
+    ApiClient -> APIFootball : GET /fixtures?live=all
+    activate APIFootball
+    APIFootball --> ApiClient : Live matches list
+    deactivate APIFootball
+    
+    ApiClient --> Ingestion : List<matchIds>
+    deactivate ApiClient
+    
+    Ingestion -> RedisKV : SET active_match_ids\n"new,match,ids"
+    activate RedisKV
+    RedisKV --> Ingestion : OK
+    deactivate RedisKV
+    
+    note right of Ingestion
+      Auto-discovered
+      3 live matches
+    end note
+    
+    deactivate Ingestion
+end
+
+note over APIFootball
+  **Rate Limiting**
+  500ms delay between requests
+  Max 100 requests/day (free tier)
+end note
+
+note over RedisPubSub
+  **Event Channels**
+  match-events:1234
+  match-events:5678
+  match-events:9012
+end note
+
+@enduml

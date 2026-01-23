@@ -1,0 +1,193 @@
+@startuml Activity Diagram - ABC Integration
+!theme plain
+
+skinparam backgroundColor #FEFEFE
+
+title Sportbot - Diagrama de Actividad: Integración ABC
+
+|Analytics Service|
+start
+
+:Recibir MatchEvent;
+
+:Almacenar en eventHistory;
+
+if (¿Suficientes datos?\n(>= 10 eventos)?) then (no)
+    :Log: Datos insuficientes;
+    stop
+else (sí)
+    :Extraer historial de posesión;
+    :Extraer historial de goles;
+    :Obtener último evento;
+endif
+
+|ARIMA Forecaster|
+
+:Iniciar pronóstico de goles;
+
+:Aplicar Holt's Exponential Smoothing;
+
+:Calcular nivel y tendencia;
+
+partition "Generación de Predicciones" {
+    repeat
+        :Calcular pronóstico para horizonte h;
+        :Calcular margen de confianza (95%);
+        :Agregar a lista de predicciones;
+    repeat while (h < horizonte?) is (sí)
+    ->no;
+}
+
+:Calcular probabilidad de próximo gol;
+
+:Estimar minuto del próximo gol;
+
+if (¿Cambio estructural detectado?) then (sí)
+    :Marcar structural break = true;
+    :Reducir confianza;
+else (no)
+    :structural break = false;
+endif
+
+:Calcular AIC del modelo;
+
+:Generar ARIMASignal;
+
+:Retornar GoalForecast + ARIMASignal;
+
+|Bayesian Momentum Analyzer|
+
+:Recibir ARIMASignal como prior;
+
+:Calcular cambios de posesión;
+
+partition "Bayesian Update" {
+    :Definir prior mean = ARIMA trend × 10;
+    :Definir prior variance basado en confianza ARIMA;
+    :Calcular estadísticas de muestra;
+    :Actualización Bayesiana:\nprior + sample → posterior;
+}
+
+:Calcular drift (posterior mean);
+
+:Calcular volatility (√posterior variance);
+
+if (¿Structural break detectado?) then (sí)
+    :Reducir confianza × 0.7;
+else (no)
+    :Mantener confianza;
+endif
+
+:Retornar MomentumMetrics;
+
+|Monte Carlo Simulator|
+
+:Recibir MomentumMetrics + GoalForecast;
+
+:Inicializar contadores de resultados;
+
+partition "Simulación Monte Carlo" {
+    repeat
+        :Calcular tasa de goles con momentum;
+        :Simular goles restantes (Poisson);
+        :Calcular marcador final;
+        :Registrar resultado;
+    repeat while (iteración < 10,000?) is (sí)
+    ->no;
+}
+
+:Calcular probabilidades:\nVictoria/Empate/Derrota;
+
+:Encontrar marcadores más probables;
+
+:Calcular marcador esperado;
+
+:Retornar MatchPrediction;
+
+|ABC Analyzer|
+
+:Recibir todos los resultados;
+
+partition "Integración ABC" {
+    :Calcular coherencia entre modelos;
+    
+    if (¿ARIMA confianza > 0.8?) then (sí)
+        :Peso ARIMA = alto;
+    else (no)
+        :Peso ARIMA = bajo;
+    endif
+    
+    if (¿Bayesian confianza > 0.8?) then (sí)
+        :Peso Bayesian = alto;
+    else (no)
+        :Peso Bayesian = bajo;
+    endif
+    
+    :Calcular confianza integrada;
+    
+    if (¿Structural break OR\nconfianza < 0.6?) then (sí)
+        :needsRecalibration = true;
+        #LightCoral:Generar alerta de recalibración;
+    else (no)
+        :needsRecalibration = false;
+    endif
+}
+
+:Construir ABCAnalysisResult;
+
+|KPI Calculator|
+
+:Recibir eventHistory;
+
+partition "Cálculo de KPIs" {
+    :Calcular índice de presión\n(fouls + tackles + interceptions);
+    
+    :Calcular índice de peligro\n(shots + xG + corners);
+    
+    :Calcular ratio de eficiencia\n(goals / shots on target);
+    
+    :Calcular riesgo de tarjetas\n(fouls + aggressive plays);
+}
+
+partition "Generación de Alertas" {
+    if (presión > umbral?) then (sí)
+        #Yellow:🔥 Alerta: HIGH PRESS;
+    endif
+    
+    if (peligro > umbral?) then (sí)
+        #Orange:⚽ Alerta: GOL INMINENTE;
+    endif
+    
+    if (riesgo tarjetas > umbral?) then (sí)
+        #Red:🟨 Alerta: CARD RISK;
+    endif
+}
+
+:Retornar MatchKPIs;
+
+|Analytics Service|
+
+:Construir MatchSnapshot completo;
+
+:Guardar en SnapshotRepository;
+
+:Almacenar en Redis KV;
+
+if (needsRecalibration?) then (sí)
+    #LightCoral:Log: ⚠️ RECALIBRATION NEEDED;
+else (no)
+    #LightGreen:Log: ✓ Análisis exitoso;
+endif
+
+stop
+
+note right
+  **ABC Integration Flow**
+  1. ARIMA analiza tendencias de goles
+  2. Bayesian usa ARIMA como prior
+  3. Monte Carlo usa ambos para simular
+  4. KPIs calculados en paralelo
+  5. Integración y validación final
+end note
+
+@enduml

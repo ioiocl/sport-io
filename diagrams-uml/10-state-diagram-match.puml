@@ -1,0 +1,144 @@
+@startuml State Diagram - Match Analysis
+!theme plain
+
+skinparam backgroundColor #FEFEFE
+
+title Sportbot - Diagrama de Estados: Análisis de Partido
+
+[*] --> Waiting : Sistema iniciado
+
+state "Waiting" as Waiting {
+    Waiting : No hay partidos seleccionados
+    Waiting : Esperando configuración
+}
+
+Waiting --> Discovering : Auto-discovery activado
+
+state "Discovering" as Discovering {
+    Discovering : Consultando API-Football
+    Discovering : Buscando partidos en vivo
+}
+
+Discovering --> Waiting : No hay partidos en vivo
+Discovering --> Monitoring : Partidos encontrados
+
+Waiting --> Monitoring : Usuario selecciona partidos
+
+state "Monitoring" as Monitoring {
+    Monitoring : Polling cada 15s
+    Monitoring : Publicando eventos
+    Monitoring : < 10 eventos acumulados
+}
+
+Monitoring --> Analyzing : >= 10 eventos acumulados
+
+state "Analyzing" as Analyzing {
+    state "ARIMA Processing" as ARIMA
+    state "Bayesian Processing" as Bayesian
+    state "Monte Carlo Processing" as MonteCarlo
+    state "KPI Calculation" as KPI
+    
+    [*] --> ARIMA
+    ARIMA --> Bayesian : ARIMASignal generado
+    Bayesian --> MonteCarlo : MomentumMetrics calculado
+    MonteCarlo --> KPI : MatchPrediction generado
+    KPI --> [*] : MatchKPIs calculado
+}
+
+Analyzing --> Normal : Confianza alta\nNo structural breaks
+
+state "Normal" as Normal {
+    Normal : Análisis estable
+    Normal : Broadcasting activo
+    Normal : Confianza > 0.8
+    
+    state "Match State" as MatchState {
+        state "HOME_DOMINATING" as HomeDom
+        state "HOME_SLIGHT_ADVANTAGE" as HomeAdv
+        state "BALANCED" as Balanced
+        state "AWAY_SLIGHT_ADVANTAGE" as AwayAdv
+        state "AWAY_DOMINATING" as AwayDom
+        
+        [*] --> Balanced
+        Balanced --> HomeAdv : drift > 0.03
+        HomeAdv --> HomeDom : drift > 0.10
+        HomeDom --> HomeAdv : drift < 0.10
+        HomeAdv --> Balanced : drift < 0.03
+        
+        Balanced --> AwayAdv : drift < -0.03
+        AwayAdv --> AwayDom : drift < -0.10
+        AwayDom --> AwayAdv : drift > -0.10
+        AwayAdv --> Balanced : drift > -0.03
+    }
+}
+
+Analyzing --> Recalibrating : Structural break detectado\nO confianza < 0.6
+
+state "Recalibrating" as Recalibrating {
+    Recalibrating : ⚠️ Recalibración necesaria
+    Recalibrating : Ajustando modelos
+    Recalibrating : Reduciendo confianza
+}
+
+Recalibrating --> Normal : Modelos recalibrados\nConfianza restaurada
+
+Normal --> Monitoring : Nuevos eventos recibidos
+Recalibrating --> Monitoring : Nuevos eventos recibidos
+
+state "Alert States" as Alerts {
+    state "High Press Alert" as HighPress {
+        HighPress : 🔥 Presión alta detectada
+        HighPress : Índice > umbral
+    }
+    
+    state "Goal Imminent Alert" as GoalAlert {
+        GoalAlert : ⚽ Gol inminente
+        GoalAlert : Peligro > umbral
+    }
+    
+    state "Card Risk Alert" as CardAlert {
+        CardAlert : 🟨 Riesgo de tarjetas
+        CardAlert : Fouls > umbral
+    }
+}
+
+Normal --> Alerts : KPI umbral excedido
+Alerts --> Normal : KPI normalizado
+
+Normal --> Finished : Partido terminado (FT)
+Recalibrating --> Finished : Partido terminado (FT)
+
+state "Finished" as Finished {
+    Finished : Status = FT
+    Finished : Análisis final guardado
+    Finished : Limpiando historial
+}
+
+Finished --> Waiting : Partido removido de activos
+
+Monitoring --> Waiting : Usuario deselecciona partido
+Normal --> Waiting : Usuario deselecciona partido
+
+note right of Analyzing
+  **ABC Integration**
+  ARIMA → Bayesian → Monte Carlo
+  Procesamiento secuencial
+  con integración de resultados
+end note
+
+note right of Recalibrating
+  **Triggers de Recalibración**
+  - Structural break en ARIMA
+  - Confianza integrada < 0.6
+  - Cambio drástico en momentum
+  - Evento inesperado (gol, expulsión)
+end note
+
+note bottom of Alerts
+  **Alertas en Tiempo Real**
+  Generadas por KPICalculator
+  Transmitidas vía WebSocket
+  Mostradas en Dashboard
+end note
+
+@enduml

@@ -1,0 +1,146 @@
+@startuml Use Case Diagram - Sportbot
+!theme plain
+
+skinparam backgroundColor #FEFEFE
+
+left to right direction
+
+actor "Usuario Final" as User
+actor "API-Football" as API <<external>>
+actor "Administrador" as Admin
+
+rectangle "Sportbot - Sistema de Análisis de Fútbol" {
+    
+    package "Gestión de Partidos" {
+        usecase "Seleccionar partidos\na monitorear" as UC1
+        usecase "Auto-descubrir\npartidos en vivo" as UC2
+        usecase "Actualizar lista\nde partidos activos" as UC3
+    }
+    
+    package "Ingesta de Datos" {
+        usecase "Obtener datos\nde partidos en vivo" as UC4
+        usecase "Normalizar eventos\nde partido" as UC5
+        usecase "Publicar eventos\na Redis Pub/Sub" as UC6
+    }
+    
+    package "Análisis Bayesiano" {
+        usecase "Calcular momentum\ndel partido" as UC7
+        usecase "Determinar drift\ny volatility" as UC8
+        usecase "Identificar equipo\ndominante" as UC9
+    }
+    
+    package "Predicción ARIMA" {
+        usecase "Pronosticar\npróximos goles" as UC10
+        usecase "Calcular probabilidad\nde gol" as UC11
+        usecase "Detectar cambios\nestructurales" as UC12
+    }
+    
+    package "Simulación Monte Carlo" {
+        usecase "Simular 10,000\nfinales de partido" as UC13
+        usecase "Calcular probabilidades\nde victoria/empate/derrota" as UC14
+        usecase "Predecir marcador\nfinal más probable" as UC15
+    }
+    
+    package "Análisis ABC Integrado" {
+        usecase "Integrar ARIMA,\nBayesian y Monte Carlo" as UC16
+        usecase "Generar señales de\nrecalibración" as UC17
+        usecase "Calcular confianza\nde integración" as UC18
+    }
+    
+    package "Cálculo de KPIs" {
+        usecase "Calcular índices\nde presión" as UC19
+        usecase "Calcular índices\nde peligro" as UC20
+        usecase "Generar alertas\nen tiempo real" as UC21
+        usecase "Calcular riesgo\nde tarjetas" as UC22
+    }
+    
+    package "Visualización" {
+        usecase "Ver partidos\nen tiempo real" as UC23
+        usecase "Ver predicciones\ny probabilidades" as UC24
+        usecase "Ver estadísticas\ndetalladas" as UC25
+        usecase "Recibir alertas\nde eventos importantes" as UC26
+    }
+    
+    package "Broadcasting" {
+        usecase "Transmitir snapshots\nvía WebSocket" as UC27
+        usecase "Gestionar conexiones\nde clientes" as UC28
+    }
+}
+
+' User interactions
+User --> UC1
+User --> UC23
+User --> UC24
+User --> UC25
+User --> UC26
+
+' Admin interactions
+Admin --> UC2
+Admin --> UC3
+
+' API interactions
+API --> UC4
+
+' Ingestion flow
+UC1 ..> UC3 : <<include>>
+UC2 ..> UC3 : <<include>>
+UC4 ..> UC5 : <<include>>
+UC5 ..> UC6 : <<include>>
+
+' Analytics flow
+UC6 ..> UC7 : <<trigger>>
+UC6 ..> UC10 : <<trigger>>
+
+UC7 ..> UC8 : <<include>>
+UC8 ..> UC9 : <<include>>
+
+UC10 ..> UC11 : <<include>>
+UC10 ..> UC12 : <<include>>
+
+UC7 ..> UC16 : <<input>>
+UC10 ..> UC16 : <<input>>
+UC13 ..> UC16 : <<input>>
+
+UC16 ..> UC17 : <<include>>
+UC16 ..> UC18 : <<include>>
+
+UC13 ..> UC14 : <<include>>
+UC13 ..> UC15 : <<include>>
+
+' KPI flow
+UC6 ..> UC19 : <<trigger>>
+UC19 ..> UC20 : <<include>>
+UC19 ..> UC21 : <<include>>
+UC19 ..> UC22 : <<include>>
+
+' Broadcasting flow
+UC16 ..> UC27 : <<trigger>>
+UC21 ..> UC27 : <<trigger>>
+UC27 ..> UC28 : <<include>>
+
+' Visualization flow
+UC27 ..> UC23 : <<update>>
+UC27 ..> UC24 : <<update>>
+UC27 ..> UC25 : <<update>>
+UC27 ..> UC26 : <<update>>
+
+note right of UC16
+  **ABC Integration**
+  Combina los tres modelos
+  analíticos principales
+end note
+
+note right of UC21
+  **Alertas en Tiempo Real**
+  - 🔥 Presión alta
+  - 🟨 Riesgo de tarjetas
+  - ⚽ Gol inminente
+end note
+
+note bottom of UC4
+  **Polling cada 15s**
+  Obtiene datos de
+  API-Football
+end note
+
+@enduml

@@ -1,0 +1,126 @@
+@startuml Component Architecture - Sportbot
+!define RECTANGLE class
+
+skinparam componentStyle rectangle
+skinparam backgroundColor #FEFEFE
+skinparam component {
+    BackgroundColor<<external>> LightBlue
+    BackgroundColor<<service>> LightGreen
+    BackgroundColor<<infrastructure>> LightYellow
+    BackgroundColor<<frontend>> LightCoral
+}
+
+title Sportbot - Arquitectura de Componentes (Hexagonal)
+
+' External Systems
+component "API-Football\nREST API" as APIFootball <<external>>
+
+' Infrastructure
+database "Redis" as Redis <<infrastructure>> {
+    component "Pub/Sub\nChannels" as RedisPubSub
+    component "Key-Value\nStore" as RedisKV
+}
+
+' Microservices
+package "Ingestion Service" <<service>> {
+    component "MatchIngestionService" as IngestionApp
+    component "FootballApiClient" as ApiClient
+    component "RedisMatchDataPublisher" as Publisher
+    
+    IngestionApp --> ApiClient
+    IngestionApp --> Publisher
+}
+
+package "Analytics Service" <<service>> {
+    component "MatchAnalysisService" as AnalyticsApp
+    component "RedisMatchDataSubscriber" as Subscriber
+    component "RedisSnapshotRepository" as SnapshotRepo
+    
+    package "Domain Analytics" {
+        component "MomentumAnalyzer\n(Bayesian)" as Momentum
+        component "GoalForecaster\n(ARIMA)" as ARIMA
+        component "MatchSimulator\n(Monte Carlo)" as MonteCarlo
+        component "ABCAnalyzer\n(Integration)" as ABC
+        component "KPICalculator" as KPI
+    }
+    
+    AnalyticsApp --> Subscriber
+    AnalyticsApp --> SnapshotRepo
+    AnalyticsApp --> Momentum
+    AnalyticsApp --> ARIMA
+    AnalyticsApp --> MonteCarlo
+    AnalyticsApp --> ABC
+    AnalyticsApp --> KPI
+}
+
+package "WebSocket API" <<service>> {
+    component "BroadcastService\n(WebSocket)" as Broadcast
+    Broadcast --> RedisKV : read snapshots
+}
+
+package "Dashboard" <<frontend>> {
+    component "React App" as ReactApp
+    component "HomePage" as HomePage
+    component "MatchCard" as MatchCard
+    
+    ReactApp --> HomePage
+    HomePage --> MatchCard
+}
+
+package "Shared Domain" {
+    component "Domain Models" as Models {
+        [MatchEvent]
+        [MatchSnapshot]
+        [MomentumMetrics]
+        [GoalForecast]
+        [MatchPrediction]
+        [MatchKPIs]
+    }
+    
+    component "Ports" as Ports {
+        [MatchDataPublisher]
+        [MatchDataSubscriber]
+        [SnapshotRepository]
+    }
+}
+
+' Connections
+APIFootball --> ApiClient : "HTTP GET\n(every 15s)"
+ApiClient --> Publisher : MatchEvent
+Publisher --> RedisPubSub : "publish\nmatch-events:ID"
+
+RedisPubSub --> Subscriber : "subscribe\nmatch-events:ID"
+Subscriber --> AnalyticsApp : MatchEvent
+
+AnalyticsApp --> SnapshotRepo : save
+SnapshotRepo --> RedisKV : "set\nlatest_match_snapshot:ID"
+
+RedisKV --> Broadcast : "get snapshots\n(every 5s)"
+Broadcast --> ReactApp : "WebSocket\n/matches"
+
+ReactApp --> RedisKV : "set\nactive_match_ids"
+RedisKV --> IngestionApp : "get\nactive_match_ids"
+RedisKV --> AnalyticsApp : "get\nactive_match_ids"
+
+note right of APIFootball
+  **Data Source**
+  - Live match data
+  - Statistics
+  - Events
+end note
+
+note right of Redis
+  **Event Bus & Cache**
+  - Pub/Sub for events
+  - KV for snapshots
+  - Active match IDs
+end note
+
+note bottom of ABC
+  **ABC Integration**
+  ARIMA → Bayesian → Monte Carlo
+  Detects structural breaks
+  Provides recalibration signals
+end note
+
+@enduml

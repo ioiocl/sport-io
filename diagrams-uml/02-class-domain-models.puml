@@ -1,0 +1,264 @@
+@startuml Domain Models - Class Diagram
+!theme plain
+
+skinparam classAttributeIconSize 0
+skinparam backgroundColor #FEFEFE
+
+title Sportbot - Diagrama de Clases del Dominio
+
+package "Domain Models" {
+    
+    class MatchEvent {
+        - String matchId
+        - Instant timestamp
+        - Integer minute
+        - String status
+        - String homeTeam
+        - String awayTeam
+        - String homeTeamId
+        - String awayTeamId
+        - Integer homeScore
+        - Integer awayScore
+        - BigDecimal possession
+        - Integer shots
+        - Integer shotsOnTarget
+        - Integer corners
+        - Integer fouls
+        - Integer yellowCards
+        - Integer redCards
+        - Integer dangerousAttacks
+        - BigDecimal expectedGoals
+        - EventType eventType
+        - TeamStatistics homeStats
+        - TeamStatistics awayStats
+        - List<LiveMatchEvent> liveEvents
+        - String apiVersion
+        + getMatchId()
+        + getTimestamp()
+        + getHomeScore()
+        + getAwayScore()
+    }
+    
+    class TeamStatistics {
+        - String teamId
+        - String teamName
+        - BigDecimal possession
+        - Integer totalShots
+        - Integer shotsOnGoal
+        - Integer shotsOffGoal
+        - Integer blockedShots
+        - Integer shotsInsideBox
+        - Integer shotsOutsideBox
+        - BigDecimal expectedGoals
+        - Integer cornerKicks
+        - Integer offsides
+        - Integer fouls
+        - Integer yellowCards
+        - Integer redCards
+        - Integer passes
+        - Integer passesAccurate
+        - BigDecimal passAccuracy
+        - Integer saves
+        - Integer tackles
+        - Integer interceptions
+        - Integer duelsWon
+        - Integer duelsTotal
+        - BigDecimal possession1H
+        - BigDecimal possession2H
+        - Integer shots1H
+        - Integer shots2H
+        + getPossession()
+        + getExpectedGoals()
+    }
+    
+    class LiveMatchEvent {
+        - Integer timeElapsed
+        - String teamName
+        - String teamId
+        - String playerName
+        - String type
+        - String detail
+        - String comments
+        + getType()
+        + getDetail()
+    }
+    
+    class MatchSnapshot {
+        - String matchId
+        - String homeTeam
+        - String awayTeam
+        - String homeTeamId
+        - String awayTeamId
+        - Instant timestamp
+        - Integer minute
+        - String status
+        - Integer homeScore
+        - Integer awayScore
+        - MomentumMetrics momentumMetrics
+        - MatchPrediction matchPrediction
+        - GoalForecast goalForecast
+        - MatchState matchState
+        - Integer sampleSize
+        - ARIMASignal arimaSignal
+        - BigDecimal abcIntegrationConfidence
+        - Boolean needsRecalibration
+        - MatchKPIs kpis
+        - TeamStatistics homeStats
+        - TeamStatistics awayStats
+        - String apiVersion
+        + getMatchId()
+        + getMomentumMetrics()
+        + getMatchPrediction()
+    }
+    
+    enum MatchState {
+        HOME_DOMINATING
+        HOME_SLIGHT_ADVANTAGE
+        BALANCED
+        AWAY_SLIGHT_ADVANTAGE
+        AWAY_DOMINATING
+    }
+    
+    class MomentumMetrics {
+        - BigDecimal drift
+        - BigDecimal volatility
+        - BigDecimal confidence
+        - Integer sampleSize
+        - BigDecimal priorMean
+        - BigDecimal priorVariance
+        - BigDecimal posteriorMean
+        - BigDecimal posteriorVariance
+        + getDrift()
+        + getVolatility()
+        + getConfidence()
+    }
+    
+    class GoalForecast {
+        - List<BigDecimal> predictions
+        - List<BigDecimal> confidenceIntervalLower
+        - List<BigDecimal> confidenceIntervalUpper
+        - Integer horizon
+        - String modelOrder
+        - BigDecimal aic
+        - BigDecimal nextGoalProbability
+        - String nextGoalTeam
+        - Integer nextGoalMinute
+        - BigDecimal confidence
+        + getPredictions()
+        + getNextGoalProbability()
+    }
+    
+    class MatchPrediction {
+        - BigDecimal probabilityHomeWin
+        - BigDecimal probabilityDraw
+        - BigDecimal probabilityAwayWin
+        - Integer expectedHomeGoals
+        - Integer expectedAwayGoals
+        - String expectedFinalScore
+        - List<ScoreProbability> mostLikelyScores
+        - Integer simulations
+        - BigDecimal confidence
+        + getProbabilityHomeWin()
+        + getExpectedFinalScore()
+    }
+    
+    class ScoreProbability {
+        - String score
+        - BigDecimal probability
+        + getScore()
+        + getProbability()
+    }
+    
+    class ARIMASignal {
+        - BigDecimal trend
+        - BigDecimal confidence
+        - Boolean structuralBreakDetected
+        - String description
+        + getTrend()
+        + isStructuralBreakDetected()
+    }
+    
+    class ABCAnalysisResult {
+        - MomentumMetrics momentumMetrics
+        - GoalForecast goalForecast
+        - MatchPrediction matchPrediction
+        - ARIMASignal arimaSignal
+        - BigDecimal integrationConfidence
+        - Boolean needsRecalibration
+        + getMomentumMetrics()
+        + getGoalForecast()
+        + getMatchPrediction()
+    }
+    
+    class MatchKPIs {
+        - BigDecimal homePressureIndex
+        - BigDecimal awayPressureIndex
+        - BigDecimal homeEfficiencyRatio
+        - BigDecimal awayEfficiencyRatio
+        - BigDecimal homeDangerIndex
+        - BigDecimal awayDangerIndex
+        - BigDecimal homeCardRisk
+        - BigDecimal awayCardRisk
+        - Boolean homeHighPressAlert
+        - Boolean awayHighPressAlert
+        - Boolean homeCardRiskAlert
+        - Boolean awayCardRiskAlert
+        - Boolean homeGoalImminentAlert
+        - Boolean awayGoalImminentAlert
+        + getHomePressureIndex()
+        + getHomeDangerIndex()
+    }
+    
+    enum EventType {
+        NONE
+        GOAL
+        YELLOW_CARD
+        RED_CARD
+        SUBSTITUTION
+    }
+}
+
+' Relationships
+MatchEvent "1" *-- "1" TeamStatistics : homeStats
+MatchEvent "1" *-- "1" TeamStatistics : awayStats
+MatchEvent "1" *-- "*" LiveMatchEvent : liveEvents
+MatchEvent --> EventType : eventType
+
+MatchSnapshot "1" *-- "1" MomentumMetrics : momentumMetrics
+MatchSnapshot "1" *-- "1" MatchPrediction : matchPrediction
+MatchSnapshot "1" *-- "1" GoalForecast : goalForecast
+MatchSnapshot "1" *-- "1" ARIMASignal : arimaSignal
+MatchSnapshot "1" *-- "1" MatchKPIs : kpis
+MatchSnapshot "1" *-- "1" TeamStatistics : homeStats
+MatchSnapshot "1" *-- "1" TeamStatistics : awayStats
+MatchSnapshot --> MatchState : matchState
+
+MatchPrediction "1" *-- "*" ScoreProbability : mostLikelyScores
+
+ABCAnalysisResult "1" *-- "1" MomentumMetrics
+ABCAnalysisResult "1" *-- "1" GoalForecast
+ABCAnalysisResult "1" *-- "1" MatchPrediction
+ABCAnalysisResult "1" *-- "1" ARIMASignal
+
+note right of MatchEvent
+  **Raw Event Data**
+  Received from API-Football
+  Published to Redis Pub/Sub
+  Contains real-time statistics
+end note
+
+note right of MatchSnapshot
+  **Analyzed Snapshot**
+  Complete analysis result
+  Stored in Redis KV
+  Broadcast via WebSocket
+end note
+
+note bottom of ABCAnalysisResult
+  **ABC Integration**
+  ARIMA → Bayesian → Monte Carlo
+  Integrated confidence score
+  Recalibration signals
+end note
+
+@enduml

@@ -1,0 +1,201 @@
+@startuml Hexagonal Architecture - Ports & Adapters
+!theme plain
+
+skinparam backgroundColor #FEFEFE
+skinparam classAttributeIconSize 0
+
+title Sportbot - Arquitectura Hexagonal (Ports & Adapters)
+
+package "Domain Core" <<Rectangle>> {
+    
+    interface MatchDataPublisher <<Port>> {
+        + publish(MatchEvent)
+    }
+    
+    interface MatchDataSubscriber <<Port>> {
+        + subscribe(matchIds[], handler)
+        + unsubscribe()
+    }
+    
+    interface SnapshotRepository <<Port>> {
+        + save(MatchSnapshot)
+        + findById(matchId): MatchSnapshot
+    }
+    
+    class MomentumAnalyzer <<Domain Service>> {
+        + analyze(possessionHistory): MomentumMetrics
+        + analyzeWithARIMAPrior(possessionHistory, arimaSignal): MomentumMetrics
+        - calculatePossessionChanges()
+        - createDefaultMetrics()
+    }
+    
+    class GoalForecaster <<Domain Service>> {
+        + forecast(goalHistory, horizon): GoalForecast
+        + extractARIMASignal(): ARIMASignal
+        - calculateAIC()
+        - detectStructuralBreak()
+    }
+    
+    class MatchSimulator <<Domain Service>> {
+        + simulate(homeScore, awayScore, momentum, forecast, minutes): MatchPrediction
+        - runSimulation()
+        - calculateProbabilities()
+    }
+    
+    class ABCAnalyzer <<Domain Service>> {
+        + analyze(possessionHistory, goalHistory, scores, minutes): ABCAnalysisResult
+        - integrateModels()
+        - calculateIntegrationConfidence()
+        - checkRecalibrationNeeded()
+    }
+    
+    class KPICalculator <<Domain Service>> {
+        + calculate(eventHistory): MatchKPIs
+        - calculatePressureIndex()
+        - calculateDangerIndex()
+        - calculateCardRisk()
+        - generateAlerts()
+    }
+}
+
+package "Application Layer" <<Rectangle>> {
+    
+    class MatchIngestionService <<Application Service>> {
+        - footballApiClient
+        - matchDataPublisher
+        - valueCommands
+        + pollMatches()
+        + checkActiveMatches()
+        + discoverLiveMatches()
+    }
+    
+    class MatchAnalysisService <<Application Service>> {
+        - matchDataSubscriber
+        - snapshotRepository
+        - momentumAnalyzer
+        - goalForecaster
+        - matchSimulator
+        - abcAnalyzer
+        - kpiCalculator
+        + handleMatchEvent(event)
+        + generateSnapshots()
+        + checkForNewMatches()
+    }
+    
+    class BroadcastService <<Application Service>> {
+        - redisDataSource
+        - sessions
+        + onOpen(session)
+        + onClose(session)
+        + broadcast()
+    }
+}
+
+package "Adapters - Infrastructure" <<Rectangle>> {
+    
+    class FootballApiClient <<Adapter>> {
+        - httpClient
+        - apiKey
+        - baseUrl
+        + fetchMatchData(matchId): MatchEvent
+        + getLiveMatches(): List<String>
+        + fetchLiveEvents(matchId): List<LiveMatchEvent>
+        - makeRequest(url): JsonNode
+        - parseTeamStatistics(): TeamStatistics
+    }
+    
+    class RedisMatchDataPublisher <<Adapter>> {
+        - pubSubCommands
+        - objectMapper
+        + publish(event)
+    }
+    
+    class RedisMatchDataSubscriber <<Adapter>> {
+        - pubSubCommands
+        - objectMapper
+        + subscribe(matchIds[], handler)
+        + unsubscribe()
+    }
+    
+    class RedisSnapshotRepository <<Adapter>> {
+        - valueCommands
+        - objectMapper
+        + save(snapshot)
+        + findById(matchId): MatchSnapshot
+    }
+}
+
+package "External Systems" <<Rectangle>> {
+    
+    class "API-Football\nREST API" as APIFootball <<External>> {
+        + GET /fixtures?id=X
+        + GET /fixtures/statistics?fixture=X
+        + GET /fixtures/events?fixture=X
+        + GET /fixtures?live=all
+    }
+    
+    database "Redis\nPub/Sub + KV" as Redis <<External>> {
+        Channels: match-events:*
+        Keys: latest_match_snapshot:*
+        Keys: active_match_ids
+    }
+}
+
+' Application uses Ports
+MatchIngestionService --> MatchDataPublisher : uses
+MatchAnalysisService --> MatchDataSubscriber : uses
+MatchAnalysisService --> SnapshotRepository : uses
+
+' Application uses Domain Services
+MatchAnalysisService --> MomentumAnalyzer : uses
+MatchAnalysisService --> GoalForecaster : uses
+MatchAnalysisService --> MatchSimulator : uses
+MatchAnalysisService --> ABCAnalyzer : uses
+MatchAnalysisService --> KPICalculator : uses
+
+' Domain Services collaboration
+ABCAnalyzer --> MomentumAnalyzer : uses
+ABCAnalyzer --> GoalForecaster : uses
+ABCAnalyzer --> MatchSimulator : uses
+
+' Adapters implement Ports
+RedisMatchDataPublisher ..|> MatchDataPublisher : implements
+RedisMatchDataSubscriber ..|> MatchDataSubscriber : implements
+RedisSnapshotRepository ..|> SnapshotRepository : implements
+
+' Application uses Adapters
+MatchIngestionService --> FootballApiClient : uses
+BroadcastService --> Redis : reads from
+
+' Adapters use External Systems
+FootballApiClient --> APIFootball : HTTP
+RedisMatchDataPublisher --> Redis : PUBLISH
+RedisMatchDataSubscriber --> Redis : SUBSCRIBE
+RedisSnapshotRepository --> Redis : SET/GET
+
+note right of MatchDataPublisher
+  **Output Port**
+  Abstracción para publicar
+  eventos de partido
+end note
+
+note right of MatchDataSubscriber
+  **Input Port**
+  Abstracción para suscribirse
+  a eventos de partido
+end note
+
+note right of ABCAnalyzer
+  **Core Domain Logic**
+  Integra ARIMA → Bayesian → Monte Carlo
+  No depende de infraestructura
+end note
+
+note bottom of FootballApiClient
+  **Adapter**
+  Implementación concreta
+  para API-Football
+  Fácilmente reemplazable
+end note
+
+@enduml

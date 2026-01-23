@@ -1,0 +1,215 @@
+@startuml Sequence - Analytics Processing Flow
+!theme plain
+
+skinparam backgroundColor #FEFEFE
+skinparam sequenceMessageAlign center
+
+title Sportbot - Flujo de Análisis (ABC Integration)
+
+database "Redis\nPub/Sub" as RedisPubSub
+participant "Analytics\nService" as Analytics
+participant "Redis\nSubscriber" as Subscriber
+participant "ABC\nAnalyzer" as ABC
+participant "ARIMA\nForecaster" as ARIMA
+participant "Bayesian\nMomentum" as Bayesian
+participant "Monte Carlo\nSimulator" as MonteCarlo
+participant "KPI\nCalculator" as KPI
+participant "Snapshot\nRepository" as SnapshotRepo
+database "Redis KV" as RedisKV
+
+== Event Subscription ==
+
+Analytics -> Subscriber : subscribe(matchIds, handler)
+activate Analytics
+activate Subscriber
+
+Subscriber -> RedisPubSub : SUBSCRIBE\nmatch-events:1234
+activate RedisPubSub
+RedisPubSub --> Subscriber : Subscribed
+deactivate RedisPubSub
+
+Subscriber --> Analytics : Ready
+deactivate Subscriber
+deactivate Analytics
+
+== Event Processing ==
+
+RedisPubSub -> Subscriber : Message:\nmatch-events:1234\n{MatchEvent}
+activate Subscriber
+
+Subscriber -> Subscriber : Deserialize JSON\nto MatchEvent
+
+Subscriber -> Analytics : handleMatchEvent(event)
+deactivate Subscriber
+activate Analytics
+
+Analytics -> Analytics : Store in\neventHistory[matchId]
+
+alt Sufficient data (>= 10 events)
+    Analytics -> Analytics : Extract possession\nhistory
+    Analytics -> Analytics : Extract goal\nhistory
+    
+    note right of Analytics
+      Possession: [52, 53, 51, 54, ...]
+      Goals: [0, 0, 1, 1, 2, ...]
+    end note
+    
+    Analytics --> Analytics : Continue
+else Insufficient data
+    Analytics --> Analytics : Skip analysis
+    note right of Analytics
+      Log: Not enough data
+      (9 events)
+    end note
+end
+
+deactivate Analytics
+
+== Snapshot Generation (every 15s) ==
+
+loop Every 15 seconds
+    Analytics -> Analytics : generateSnapshot(matchId)
+    activate Analytics
+    
+    Analytics -> Analytics : Get eventHistory
+    Analytics -> Analytics : Extract latest event
+    
+    '=== ABC Integration Flow ===
+    
+    Analytics -> ABC : analyze(\npossessionHistory,\ngoalHistory,\nhomeScore, awayScore,\nminutesRemaining)
+    activate ABC
+    
+    '--- Step 1: ARIMA ---
+    ABC -> ARIMA : forecast(goalHistory, horizon)
+    activate ARIMA
+    
+    ARIMA -> ARIMA : Apply Holt's\nExponential Smoothing
+    ARIMA -> ARIMA : Calculate trend\nand level
+    ARIMA -> ARIMA : Generate predictions\nwith confidence intervals
+    ARIMA -> ARIMA : Detect structural\nbreaks
+    
+    ARIMA --> ABC : GoalForecast +\nARIMASignal
+    deactivate ARIMA
+    
+    note right of ARIMA
+      **ARIMA Output**
+      - Next goal probability: 0.45
+      - Trend: 0.15 goals/min
+      - Structural break: false
+    end note
+    
+    '--- Step 2: Bayesian (with ARIMA prior) ---
+    ABC -> Bayesian : analyzeWithARIMAPrior(\npossessionHistory,\narimaSignal)
+    activate Bayesian
+    
+    Bayesian -> Bayesian : Calculate possession\nchanges
+    Bayesian -> Bayesian : Use ARIMA trend as\nprior mean
+    Bayesian -> Bayesian : Bayesian update:\nprior + sample → posterior
+    Bayesian -> Bayesian : Calculate drift\nand volatility
+    
+    Bayesian --> ABC : MomentumMetrics
+    deactivate Bayesian
+    
+    note right of Bayesian
+      **Bayesian Output**
+      - Drift: 0.12 (HOME advantage)
+      - Volatility: 0.08
+      - Confidence: 0.95
+    end note
+    
+    '--- Step 3: Monte Carlo ---
+    ABC -> MonteCarlo : simulate(\nhomeScore, awayScore,\nmomentumMetrics,\ngoalForecast,\nminutesRemaining)
+    activate MonteCarlo
+    
+    MonteCarlo -> MonteCarlo : Run 10,000\nsimulations
+    
+    loop 10,000 iterations
+        MonteCarlo -> MonteCarlo : Simulate goals\nusing Poisson + momentum
+        MonteCarlo -> MonteCarlo : Record final score
+    end
+    
+    MonteCarlo -> MonteCarlo : Calculate win/draw/loss\nprobabilities
+    MonteCarlo -> MonteCarlo : Find most likely\nscores
+    
+    MonteCarlo --> ABC : MatchPrediction
+    deactivate MonteCarlo
+    
+    note right of MonteCarlo
+      **Monte Carlo Output**
+      - Home win: 65%
+      - Draw: 20%
+      - Away win: 15%
+      - Expected: 3-1
+    end note
+    
+    '--- Integration ---
+    ABC -> ABC : Calculate integration\nconfidence
+    ABC -> ABC : Check if recalibration\nneeded
+    
+    ABC --> Analytics : ABCAnalysisResult
+    deactivate ABC
+    
+    '=== KPI Calculation ===
+    
+    Analytics -> KPI : calculate(eventHistory)
+    activate KPI
+    
+    KPI -> KPI : Calculate pressure\nindices
+    KPI -> KPI : Calculate efficiency\nratios
+    KPI -> KPI : Calculate danger\nindices
+    KPI -> KPI : Calculate card risk
+    KPI -> KPI : Generate alerts
+    
+    KPI --> Analytics : MatchKPIs
+    deactivate KPI
+    
+    note right of KPI
+      **KPI Alerts**
+      🔥 HOME HIGH PRESS
+      ⚽ AWAY GOAL IMMINENT
+    end note
+    
+    '=== Snapshot Creation ===
+    
+    Analytics -> Analytics : Build MatchSnapshot\nwith all analytics
+    
+    Analytics -> SnapshotRepo : save(snapshot)
+    activate SnapshotRepo
+    
+    SnapshotRepo -> SnapshotRepo : Serialize to JSON
+    
+    SnapshotRepo -> RedisKV : SET\nlatest_match_snapshot:1234\n{MatchSnapshot JSON}
+    activate RedisKV
+    RedisKV --> SnapshotRepo : OK
+    deactivate RedisKV
+    
+    SnapshotRepo --> Analytics : Saved
+    deactivate SnapshotRepo
+    
+    alt Needs Recalibration
+        note right of Analytics
+          ⚠️ Match 1234: HOME_DOMINATING
+          RECALIBRATION NEEDED!
+          ARIMA: Structural break detected
+        end note
+    else Normal
+        note right of Analytics
+          ✓ Match 1234: HOME_DOMINATING
+          ABC confidence: 0.92
+          ARIMA: Stable trend
+        end note
+    end
+    
+    deactivate Analytics
+end
+
+note over ABC
+  **ABC Integration**
+  1. ARIMA analyzes goal trends
+  2. Bayesian uses ARIMA as prior
+  3. Monte Carlo uses both for simulation
+  4. Integration confidence calculated
+  5. Recalibration signals generated
+end note
+
+@enduml
